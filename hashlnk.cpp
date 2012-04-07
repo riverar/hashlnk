@@ -35,7 +35,7 @@ DEFINE_PROPERTYKEY(PKEY_WINX_HASH, 0xFB8D2D7B, 0x90D1, 0x4E34, 0xBF, 0x60, 0x6E,
     if(FAILED(HR)) \
     { \
         wprintf(L"%s (hr: %X)\r\n", MESSAGE, hr); \
-        return HRESULT_FROM_WIN32(HR); \
+        return HR; \
     }
 
 using namespace std;
@@ -91,7 +91,7 @@ int wmain(int argc, wchar_t* argv[])
     if(FAILED(hr) && hr != HRESULT_FROM_WIN32(ERROR_NOT_FOUND))
     {
         wprintf(L"Failed to retrieve target arguments.");
-        return HRESULT_FROM_WIN32(hr);
+        return hr;
     }
     wchar_t* targetPathSansRoot = PathSkipRootW(targetPath);
 
