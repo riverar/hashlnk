@@ -29,14 +29,19 @@
 
 #define NOTAPE // We ran out.
 #include <Windows.h>
+#include <Knownfolders.h>
 
 #include <iostream>
 #include <memory>
 
 #include <Shlwapi.h>
+#include <ShlObj.h>
 #include <ShObjIdl.h>
 
 #include <initguid.h>
 #include <propkey.h>
 
 #include <atlbase.h>
+#include <vector>
+
+#include <strsafe.h>

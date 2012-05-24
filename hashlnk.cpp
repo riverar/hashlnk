@@ -34,22 +34,23 @@ DEFINE_PROPERTYKEY(PKEY_WINX_HASH, 0xFB8D2D7B, 0x90D1, 0x4E34, 0xBF, 0x60, 0x6E,
 #define CHECKHR(HR, MESSAGE) \
     if(FAILED(HR)) \
     { \
-        wprintf(L"%s (hr: %X)\r\n", MESSAGE, hr); \
+        if(MESSAGE) wprintf(L"%s (hr: %X)\r\n", MESSAGE, hr); \
         return HR; \
     }
 
+#define GUID_MAX_LEN 40
+
 using namespace std;
+
+HRESULT GeneralizePath(const wchar_t*, wchar_t*, size_t);
 
 int wmain(int argc, wchar_t* argv[])
 {
     wprintf(
-        L"\nHashLnk v0.1.1.0\n"
+        L"\nHashLnk v0.2.0.0\n"
         L"Copyright(c) 2012 Rafael Rivera\n"
         L"Within Windows - http://withinwindows.com\n\n");
 
-    //
-    // Before we go too far, let's see if we have a few things in order.
-    //
     if(argc != 2)
     {
         wprintf(L"usage: hashlnk <.lnk file>\n\n");
@@ -86,6 +87,13 @@ int wmain(int argc, wchar_t* argv[])
     hr = lnk->GetString(PKEY_Link_TargetParsingPath, &targetPath);
     CHECKHR(hr, L"Failed to retrieve target path.");
 
+    unique_ptr<wchar_t[]> generalizedPath(new wchar_t[MAX_PATH]);
+    hr = GeneralizePath(targetPath, generalizedPath.get(), MAX_PATH);
+    if(FAILED(hr))
+    {
+        return hr;
+    }
+
     CComHeapPtr<wchar_t> targetArgs;
     hr = lnk->GetString(PKEY_Link_Arguments, &targetArgs);
     if(FAILED(hr) && hr != HRESULT_FROM_WIN32(ERROR_NOT_FOUND))
@@ -93,14 +101,13 @@ int wmain(int argc, wchar_t* argv[])
         wprintf(L"Failed to retrieve target arguments.");
         return hr;
     }
-    wchar_t* targetPathSansRoot = PathSkipRootW(targetPath);
 
     //
     // Glue everything together and lowercase it, so we can hash it.
     //
     const wchar_t salt[] = L"do not prehash links.  this should only be done by the user.";
 
-    wstring blob = targetPathSansRoot;
+    wstring blob = generalizedPath.get();
     if(targetArgs)
     {
         blob += targetArgs;
@@ -138,9 +145,90 @@ int wmain(int argc, wchar_t* argv[])
     hr = store->Commit();
     CHECKHR(hr, L"Failed to write changes to .lnk.");
 
-    wprintf(L"Hash generated and applied (0x%X)", hash);
+    wprintf(L"Hash generated and applied (0x%X)\n", hash);
 
     CoUninitialize();
 
     return 0;
+}
+
+HRESULT GeneralizePath(const wchar_t* originalPath, wchar_t* generalizedPath, size_t capacity)
+{
+    HRESULT hr = ERROR_SUCCESS;
+
+    //
+    // Do we need to do some trickery to get the Program Files
+    // known folder?
+    //
+    BOOL isRunningUnderEmulation = FALSE;
+    IsWow64Process(GetCurrentProcess(), &isRunningUnderEmulation);
+
+    //
+    // Because SHGetKnownFolderPath doesn't properly retrieve
+    // FOLDERID_ProgramFilesX64 from 32-bit processes, I
+    // abandoned its use. We'll use good ol' environment
+    // variables instead. >_>. The FOLDERIDs are for
+    // generalization purposes only.
+    //
+    // It sucks but not as much as distributing two
+    // flavors of hashlnk.
+    //
+    
+    KNOWNFOLDERID guids[3];
+    wchar_t* tokens[3];
+
+    if(isRunningUnderEmulation)
+    {
+        tokens[0] = L"%ProgramW6432%";
+        guids[0] = FOLDERID_ProgramFilesX64;
+    }
+    else
+    {
+        tokens[0] = L"%ProgramFiles%";
+        guids[0] = FOLDERID_ProgramFilesX86;
+    }
+
+    tokens[1] = L"%SystemRoot%\\System32";
+    guids[1] = FOLDERID_System;
+
+    tokens[2] = L"%SystemRoot%";
+    guids[2] = FOLDERID_Windows;
+
+    for(int i = 0; i < sizeof(guids) / sizeof(KNOWNFOLDERID); ++i)
+    {
+        unique_ptr<wchar_t[]> folderPath(new wchar_t[MAX_PATH]);
+        
+        int numCharsInPath = ExpandEnvironmentStringsW(tokens[i], folderPath.get(), MAX_PATH);
+        if(numCharsInPath == 0)
+        {
+            CHECKHR(hr, L"Failed to resolve known folder location.");
+        }
+
+        --numCharsInPath; // Remove NULL terminator from count.
+
+        int numCommonChars = PathCommonPrefixW(folderPath.get(), originalPath, NULL);
+        if(numCommonChars < numCharsInPath)
+        {
+            continue;
+        }
+
+        unique_ptr<wchar_t[]> guid(new wchar_t[GUID_MAX_LEN]);
+        if(!StringFromGUID2(guids[i], guid.get(), GUID_MAX_LEN))
+        {
+            hr = E_OUTOFMEMORY;
+            CHECKHR(hr, L"Failed to derive string from known folder GUID.");
+        }
+
+        ZeroMemory(generalizedPath, capacity);
+
+        hr = StringCchCatW(generalizedPath, MAX_PATH, guid.get());
+        CHECKHR(hr, L"Failed to build generalized path.");
+
+        hr = StringCchCatW(generalizedPath, MAX_PATH, originalPath + numCommonChars);
+        CHECKHR(hr, L"Failed to build generalized path.");
+
+        break;
+    }
+
+    return hr;
 }
