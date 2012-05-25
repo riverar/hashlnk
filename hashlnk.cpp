@@ -122,7 +122,7 @@ int wmain(int argc, wchar_t* argv[])
     }
 
     unique_ptr<wchar_t[]> hashableBlob(new wchar_t[lowerCaseLength]);
-    int test = LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_LOWERCASE, blob.data(), blob.size(), hashableBlob.get(), lowerCaseLength, nullptr, nullptr, 0);
+    LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_LOWERCASE, blob.data(), blob.size(), hashableBlob.get(), lowerCaseLength, nullptr, nullptr, 0);
 
     ULONG hash = 0;
     hr = HashData(reinterpret_cast<BYTE*>(hashableBlob.get()), lowerCaseLength * sizeof(wchar_t), reinterpret_cast<BYTE*>(&hash), sizeof(hash));
