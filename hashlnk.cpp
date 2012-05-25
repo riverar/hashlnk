@@ -122,7 +122,7 @@ int wmain(int argc, wchar_t* argv[])
     }
 
     unique_ptr<wchar_t[]> hashableBlob(new wchar_t[lowerCaseLength]);
-    LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_LOWERCASE, blob.data(), blob.size(), hashableBlob.get(), lowerCaseLength, nullptr, nullptr, 0);
+    int test = LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_LOWERCASE, blob.data(), blob.size(), hashableBlob.get(), lowerCaseLength, nullptr, nullptr, 0);
 
     ULONG hash = 0;
     hr = HashData(reinterpret_cast<BYTE*>(hashableBlob.get()), lowerCaseLength * sizeof(wchar_t), reinterpret_cast<BYTE*>(&hash), sizeof(hash));
@@ -173,6 +173,18 @@ HRESULT GeneralizePath(const wchar_t* originalPath, wchar_t* generalizedPath, si
     // It sucks but not as much as distributing two
     // flavors of hashlnk.
     //
+
+    //
+    // Also, you're probably wondering about
+    // FOLDERID_ProgramFiles dupes here. twinui!_CheckLinkHash
+    // uses FOLDERID_ProgramFiles to retrieve the "native"
+    // default Program Files location. To emulate this
+    // behavior, without cutting two archs of the program,
+    // I use the variables below. That's fine, but I must
+    // use the FOLDERID_ProgramFiles GUID in the resulting
+    // generalized path as Windows' expects a hash based
+    // on that. Grr.
+    //
     
     KNOWNFOLDERID guids[3];
     wchar_t* tokens[3];
@@ -180,12 +192,12 @@ HRESULT GeneralizePath(const wchar_t* originalPath, wchar_t* generalizedPath, si
     if(isRunningUnderEmulation)
     {
         tokens[0] = L"%ProgramW6432%";
-        guids[0] = FOLDERID_ProgramFilesX64;
+        guids[0] = FOLDERID_ProgramFiles;
     }
     else
     {
         tokens[0] = L"%ProgramFiles%";
-        guids[0] = FOLDERID_ProgramFilesX86;
+        guids[0] = FOLDERID_ProgramFiles;
     }
 
     tokens[1] = L"%SystemRoot%\\System32";
