@@ -36,12 +36,8 @@
 
 #include <Shlwapi.h>
 #include <ShlObj.h>
-#include <ShObjIdl.h>
 
 #include <initguid.h>
 #include <propkey.h>
 
 #include <atlbase.h>
-#include <vector>
-
-#include <strsafe.h>

@@ -122,7 +122,7 @@ int wmain(int argc, wchar_t* argv[])
     }
 
     unique_ptr<wchar_t[]> hashableBlob(new wchar_t[lowerCaseLength]);
-    LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_LOWERCASE, blob.data(), blob.size(), hashableBlob.get(), lowerCaseLength, nullptr, nullptr, 0);
+    int test = LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_LOWERCASE, blob.data(), blob.size(), hashableBlob.get(), lowerCaseLength, nullptr, nullptr, 0);
 
     ULONG hash = 0;
     hr = HashData(reinterpret_cast<BYTE*>(hashableBlob.get()), lowerCaseLength * sizeof(wchar_t), reinterpret_cast<BYTE*>(&hash), sizeof(hash));
@@ -154,6 +154,7 @@ int wmain(int argc, wchar_t* argv[])
 
 HRESULT GeneralizePath(const wchar_t* originalPath, wchar_t* generalizedPath, size_t capacity)
 {
+    wstring resultingPath;
     HRESULT hr = ERROR_SUCCESS;
 
     //
@@ -176,14 +177,14 @@ HRESULT GeneralizePath(const wchar_t* originalPath, wchar_t* generalizedPath, si
 
     //
     // Also, you're probably wondering about
-    // FOLDERID_ProgramFiles dupes here. twinui!_CheckLinkHash
+    // FOLDERID_ProgramFiles dupes here. TWINUI!_CheckLinkHash
     // uses FOLDERID_ProgramFiles to retrieve the "native"
     // default Program Files location. To emulate this
     // behavior, without cutting two archs of the program,
     // I use the variables below. That's fine, but I must
     // use the FOLDERID_ProgramFiles GUID in the resulting
     // generalized path as Windows' expects a hash based
-    // on that. Grr.
+    // on that.
     //
     
     KNOWNFOLDERID guids[3];
@@ -231,15 +232,21 @@ HRESULT GeneralizePath(const wchar_t* originalPath, wchar_t* generalizedPath, si
             CHECKHR(hr, L"Failed to derive string from known folder GUID.");
         }
 
-        ZeroMemory(generalizedPath, capacity);
-
-        hr = StringCchCatW(generalizedPath, MAX_PATH, guid.get());
-        CHECKHR(hr, L"Failed to build generalized path.");
-
-        hr = StringCchCatW(generalizedPath, MAX_PATH, originalPath + numCommonChars);
-        CHECKHR(hr, L"Failed to build generalized path.");
-
+        resultingPath += guid.get();
+        resultingPath += originalPath + numCommonChars;
         break;
+    }
+
+    if(resultingPath.empty())
+    {
+        resultingPath = originalPath;
+    }
+
+    ZeroMemory(generalizedPath, capacity);
+    if(resultingPath.copy(generalizedPath, capacity, 0) != resultingPath.length())
+    {
+        hr = GetLastError();
+        CHECKHR(hr, L"Failed to write resulting path to specified buffer.");
     }
 
     return hr;
